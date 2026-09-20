@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🎬 CaxumbaVideoSaver
+# 🎬 Video Saver
 
 <img src="img/caxumba.png" alt="Caxumba Video Saver" width="180" />
 
