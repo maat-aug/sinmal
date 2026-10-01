@@ -16,32 +16,73 @@ export async function getFFmpeg(): Promise<FFmpeg> {
   return ffmpeg;
 }
 
+/** Mata um exec em andamento (unico jeito de parar o ffmpeg.wasm no meio); o proximo getFFmpeg() carrega outro. */
+export function terminateFFmpeg(): void {
+  ffmpegInstance?.terminate();
+  ffmpegInstance = null;
+}
+
 export interface ByteSource {
   url: string;
   range?: { offset: number; length: number };
 }
 
-export async function downloadBytes(source: ByteSource): Promise<Uint8Array> {
+const MAX_ATTEMPTS = 3;
+
+// 4xx (exceto 408/429) nao se resolve sozinho: URL assinada expirada continua expirada
+const isRetryableStatus = (status: number) => status >= 500 || status === 408 || status === 429;
+
+export async function downloadBytes(source: ByteSource, signal?: AbortSignal): Promise<Uint8Array> {
   const headers = source.range
     ? { Range: `bytes=${source.range.offset}-${source.range.offset + source.range.length - 1}` }
     : undefined;
-  const response = await fetch(source.url, { credentials: "include", headers });
-  if (!response.ok) {
-    throw new Error(`Falha ao baixar segmento (HTTP ${response.status}): ${source.url}`);
+  for (let attempt = 1; ; attempt++) {
+    let response: Response;
+    try {
+      response = await fetch(source.url, { credentials: "include", headers, signal });
+    } catch (error) {
+      // erro de rede (conexao caiu, timeout): vale tentar de novo
+      if (signal?.aborted || attempt >= MAX_ATTEMPTS) throw error;
+      await delay(attempt * 1000, signal);
+      continue;
+    }
+    if (response.ok) return new Uint8Array(await response.arrayBuffer());
+    if (!isRetryableStatus(response.status) || attempt >= MAX_ATTEMPTS) {
+      throw new Error(`Falha ao baixar segmento (HTTP ${response.status}): ${source.url}`);
+    }
+    await delay(attempt * 1000, signal);
   }
-  return new Uint8Array(await response.arrayBuffer());
+}
+
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    signal?.throwIfAborted(); // o evento "abort" nao dispara de novo para quem chega depois
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
 }
 
 export async function downloadAndConcat(
   sources: ByteSource[],
-  onSegment?: (completed: number, total: number) => void,
+  onSegment?: (completed: number, total: number, bytes: number) => void,
+  signal?: AbortSignal,
 ): Promise<Uint8Array> {
   const parts: Uint8Array[] = [];
+  let bytes = 0;
   for (let i = 0; i < sources.length; i++) {
     const source = sources[i];
     if (!source) continue;
-    parts.push(await downloadBytes(source));
-    onSegment?.(i + 1, sources.length);
+    const part = await downloadBytes(source, signal);
+    parts.push(part);
+    bytes += part.length;
+    onSegment?.(i + 1, sources.length, bytes);
   }
   return concatBytes(parts);
 }
@@ -56,7 +97,15 @@ function concatBytes(parts: Uint8Array[]): Uint8Array {
   return combined;
 }
 
-export async function execWithLog(ffmpeg: FFmpeg, args: string[], onProgress?: () => void): Promise<void> {
+export async function execWithLog(
+  ffmpeg: FFmpeg,
+  args: string[],
+  onProgress?: () => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  signal?.throwIfAborted();
+  const onAbort = () => terminateFFmpeg();
+  signal?.addEventListener("abort", onAbort, { once: true });
   const logLines: string[] = [];
   const handleLog = ({ message }: { type: string; message: string }) => {
     logLines.push(message);
@@ -71,9 +120,11 @@ export async function execWithLog(ffmpeg: FFmpeg, args: string[], onProgress?: (
   try {
     exitCode = await ffmpeg.exec(args);
   } finally {
+    signal?.removeEventListener("abort", onAbort);
     ffmpeg.off("log", handleLog);
     ffmpeg.off("progress", handleProgress);
   }
+  signal?.throwIfAborted();
 
   if (exitCode !== 0) {
     const detail = logLines.slice(-6).join(" | ");
@@ -92,6 +143,7 @@ export async function readOutputAsBlob(ffmpeg: FFmpeg, fileName: string): Promis
 }
 
 export async function cleanupFiles(ffmpeg: FFmpeg, fileNames: string[]): Promise<void> {
+  if (!ffmpeg.loaded) return; // instancia encerrada (cancelamento): a memoria ja foi liberada
   for (const fileName of fileNames) {
     try {
       await ffmpeg.deleteFile(fileName);

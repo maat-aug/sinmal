@@ -12,15 +12,24 @@ export interface DetectedVideo {
 export interface MediaVariant {
   id: string;
   bandwidth: number;
+  /** HLS AVERAGE-BANDWIDTH; BANDWIDTH e o pico e superestima o tamanho */
+  averageBandwidth?: number;
   resolution?: string;
   name: string;
   audioUrl?: string;
+  /** Bytes estimados, quando bitrate e duracao sao conhecidos. */
+  size?: number;
+  /** Faixa so de audio (salva como .m4a, sem recodificar). */
+  audioOnly?: boolean;
 }
 
 export interface DownloadProgress {
   phase: "fetching" | "remuxing" | "saving";
+  /** segmentos concluidos (HLS/DASH) ou bytes concluidos (MP4) */
   completed?: number;
   total?: number;
+  /** bytes baixados ate agora, para calcular a velocidade */
+  bytes?: number;
 }
 
 export type DownloadJob =
@@ -35,6 +44,7 @@ export type ExtensionRequest =
   | { type: "PARSE_DASH_MANIFEST"; url: string }
   | { type: "REQUEST_DOWNLOAD"; job: DownloadJob }
   | { type: "RUN_DOWNLOAD_JOB"; job: DownloadJob }
+  | { type: "CANCEL_JOB"; jobId: string }
   | { type: "SAVE_BLOB_URL"; url: string; filename: string }
   | { type: "VIDEO_VISIBLE" };
 

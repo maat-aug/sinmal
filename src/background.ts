@@ -1,7 +1,7 @@
 import { fetchAndParsePlaylist } from "./hls/playlist";
 import { probeHasVideoTrack } from "./media/mp4probe";
-import type { DetectedVideo, DownloadJob, ExtensionRequest, ExtensionResponse, VideoKind } from "./types";
-import { errorMessage } from "./util";
+import type { DetectedVideo, DownloadJob, ExtensionRequest, ExtensionResponse, MediaVariant, VideoKind } from "./types";
+import { errorMessage, estimateSize } from "./util";
 
 const MAX_VIDEOS_PER_TAB = 30;
 const MP4_CONTENT_TYPES = new Set(["video/mp4"]);
@@ -215,10 +215,34 @@ async function ensureOffscreenDocument(): Promise<void> {
   await offscreenReadyPromise;
 }
 
+// todas as variantes tem a mesma duracao: basta ler uma playlist para estimar o tamanho de todas
+async function fetchHlsDuration(variantUrl: string): Promise<number | undefined> {
+  try {
+    const playlist = await fetchAndParsePlaylist(variantUrl);
+    if (playlist.kind !== "variant") return undefined;
+    return playlist.segments.reduce((sum, segment) => sum + segment.duration, 0) || undefined;
+  } catch {
+    return undefined; // estimativa e opcional, nunca deve impedir a listagem
+  }
+}
+
+async function buildHlsVariants(masterVariants: MediaVariant[]): Promise<MediaVariant[]> {
+  const first = masterVariants[0];
+  const duration = first ? await fetchHlsDuration(first.id) : undefined;
+  const variants: MediaVariant[] = masterVariants.map((variant) => ({
+    ...variant,
+    size: estimateSize(variant.averageBandwidth ?? variant.bandwidth, duration),
+  }));
+  const audioUrl = masterVariants.find((variant) => variant.audioUrl)?.audioUrl;
+  if (audioUrl) variants.push({ id: audioUrl, bandwidth: 0, name: "audio", audioOnly: true });
+  return variants;
+}
+
 async function handleGetHlsVariants(url: string): Promise<ExtensionResponse> {
   try {
     const playlist = await fetchAndParsePlaylist(url);
-    const variants = playlist.kind === "master" ? playlist.variants : [{ id: url, bandwidth: 0, name: "padrao" }];
+    const variants =
+      playlist.kind === "master" ? await buildHlsVariants(playlist.variants) : [{ id: url, bandwidth: 0, name: "padrao" }];
     return { type: "VARIANTS", variants };
   } catch (error) {
     return { type: "ERROR", message: errorMessage(error) };

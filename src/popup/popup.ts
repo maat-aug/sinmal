@@ -9,13 +9,17 @@ import type {
   ExtensionResponse,
   MediaVariant,
 } from "../types";
-import { errorMessage } from "../util";
+import { errorMessage, formatBytes, formatDuration } from "../util";
 
 const listElement = document.getElementById("video-list") as HTMLUListElement;
 const statusElement = document.getElementById("status") as HTMLDivElement;
 const clearButton = document.getElementById("clear-button") as HTMLButtonElement;
 
 let currentTabId: number | null = null;
+// titulo da pagina da nome melhor que a URL ("index.m3u8"); undefined cai no titulo derivado da URL
+let currentTabTitle: string | undefined;
+
+const MAX_TITLE_LENGTH = 60;
 
 async function sendRequest(request: ExtensionRequest): Promise<ExtensionResponse> {
   return (await chrome.runtime.sendMessage(request)) as ExtensionResponse;
@@ -43,18 +47,35 @@ async function requestVariants(kind: "hls" | "dash", url: string): Promise<Media
 }
 
 function sanitizeFileName(name: string): string {
-  const cleaned = name.replace(/[\\/:*?"<>|]+/g, "_").trim();
+  // o chrome.downloads recusa caracteres de controle e nomes com ponto/espaco nas pontas
+  // eslint-disable-next-line no-control-regex
+  const cleaned = name.replace(/[\\/:*?"<>|\x00-\x1f]+/g, "_").replace(/^[\s.]+|[\s.]+$/g, "");
   return cleaned.length > 0 ? cleaned : "video";
+}
+
+function baseFileName(video: DetectedVideo): string {
+  return (currentTabTitle || video.title).slice(0, MAX_TITLE_LENGTH);
 }
 
 function withExtension(name: string, extension: string): string {
   return name.toLowerCase().endsWith(`.${extension}`) ? name : `${name}.${extension}`;
 }
 
-function formatProgress(progress: DownloadProgress): string {
+function formatFetching(progress: DownloadProgress, startedAt: number): string {
+  const elapsed = (Date.now() - startedAt) / 1000;
+  const speed = progress.bytes && elapsed > 0 ? `${formatBytes(progress.bytes / elapsed)}/s` : "";
+  const { completed, total } = progress;
+  if (!completed) return "Baixando video...";
+  if (!total) return ["Baixando video...", formatBytes(progress.bytes ?? 0), speed].filter(Boolean).join(" · ");
+  const percent = Math.floor((completed / total) * 100);
+  const eta = formatDuration((elapsed / completed) * (total - completed));
+  return [`Baixando ${percent}%`, speed, eta && `${eta} restantes`].filter(Boolean).join(" · ");
+}
+
+function formatProgress(progress: DownloadProgress, startedAt: number): string {
   switch (progress.phase) {
     case "fetching":
-      return progress.total ? `Baixando segments: ${progress.completed}/${progress.total}` : "Baixando video...";
+      return formatFetching(progress, startedAt);
     case "remuxing":
       return "Remontando video (pode levar um tempo)...";
     case "saving":
@@ -68,18 +89,19 @@ function setProgress(progressElement: HTMLElement, text: string, state?: "done" 
   progressElement.classList.toggle("progress-error", state === "error");
 }
 
-function trackJob(jobId: string, button: HTMLButtonElement, progressElement: HTMLElement): void {
+function trackJob(jobId: string, progressElement: HTMLElement, onEnd: () => void): void {
+  const startedAt = Date.now();
   const listener = (message: unknown): void => {
     const event = message as DownloadEvent;
     if (!event || typeof event !== "object" || !("jobId" in event) || event.jobId !== jobId) return;
 
     if (event.type === "DOWNLOAD_PROGRESS") {
-      setProgress(progressElement, formatProgress(event.progress));
+      setProgress(progressElement, formatProgress(event.progress, startedAt));
       return;
     }
 
     chrome.runtime.onMessage.removeListener(listener);
-    button.disabled = false;
+    onEnd();
     if (event.type === "DOWNLOAD_DONE") {
       setProgress(progressElement, "Download concluido.", "done");
     } else {
@@ -89,25 +111,46 @@ function trackJob(jobId: string, button: HTMLButtonElement, progressElement: HTM
   chrome.runtime.onMessage.addListener(listener);
 }
 
-async function startDownload(job: DownloadJob, button: HTMLButtonElement, progressElement: HTMLElement): Promise<void> {
-  button.disabled = true;
+async function startDownload(job: DownloadJob, progressElement: HTMLElement, onEnd: () => void): Promise<void> {
   setProgress(progressElement, "Iniciando...");
-  trackJob(job.id, button, progressElement);
+  trackJob(job.id, progressElement, onEnd);
 
   const response = await sendRequest({ type: "REQUEST_DOWNLOAD", job });
   if (response.type === "ERROR") {
     setProgress(progressElement, `Erro: ${response.message}`, "error");
-    button.disabled = false;
+    onEnd();
   }
 }
 
+function cancelJob(jobId: string): void {
+  // o offscreen responde com DOWNLOAD_FAILED ("Download cancelado."), que libera o botao
+  const request: ExtensionRequest = { type: "CANCEL_JOB", jobId };
+  chrome.runtime.sendMessage(request).catch((error: unknown) => {
+    console.warn("Falha ao cancelar download:", error);
+  });
+}
+
 function bindDownload(button: HTMLButtonElement, progressElement: HTMLElement, buildJob: () => DownloadJob | null): void {
+  let runningJobId: string | null = null;
+  const finish = () => {
+    runningJobId = null;
+    button.textContent = "Baixar";
+    button.disabled = false;
+  };
+
   button.addEventListener("click", () => {
+    if (runningJobId) {
+      cancelJob(runningJobId);
+      button.disabled = true;
+      return;
+    }
     const job = buildJob();
     if (!job) return;
-    startDownload(job, button, progressElement).catch((error: unknown) => {
+    runningJobId = job.id;
+    button.textContent = "Cancelar";
+    startDownload(job, progressElement, finish).catch((error: unknown) => {
       setProgress(progressElement, `Erro: ${errorMessage(error)}`, "error");
-      button.disabled = false;
+      finish();
     });
   });
 }
@@ -117,13 +160,15 @@ function populateVariantSelect(select: HTMLSelectElement, variants: MediaVariant
   select.disabled = variants.length === 0;
   for (const variant of variants) {
     const option = document.createElement("option");
-    option.textContent = variant.name;
+    const label = variant.audioOnly ? "So audio (m4a)" : variant.name;
+    option.textContent = variant.size ? `${label} · ~${formatBytes(variant.size)}` : label;
     select.appendChild(option);
   }
 }
 
 function buildStreamJob(kind: "hls" | "dash", video: DetectedVideo, variant: MediaVariant): DownloadJob {
-  const filename = withExtension(sanitizeFileName(`${video.title}-${variant.name}`), "mp4");
+  const extension = variant.audioOnly ? "m4a" : "mp4";
+  const filename = withExtension(sanitizeFileName(`${baseFileName(video)}-${variant.name}`), extension);
   return kind === "hls"
     ? { id: crypto.randomUUID(), kind: "hls", variantUrl: variant.id, audioVariantUrl: variant.audioUrl, filename }
     : { id: crypto.randomUUID(), kind: "dash", manifestUrl: video.url, representationId: variant.id, filename };
@@ -281,7 +326,7 @@ function createVideoItem(video: DetectedVideo): HTMLLIElement {
       id: crypto.randomUUID(),
       kind: "mp4",
       url: video.url,
-      filename: withExtension(sanitizeFileName(video.title), "mp4"),
+      filename: withExtension(sanitizeFileName(baseFileName(video)), "mp4"),
     }));
   } else {
     createStreamControls(video.kind, video, controls, progressElement);
@@ -326,6 +371,7 @@ clearButton.addEventListener("click", () => {
 async function init(): Promise<void> {
   const tab = await getCurrentTab();
   currentTabId = tab.id as number;
+  currentTabTitle = tab.title?.trim() || undefined;
   await refreshVideos();
 }
 
