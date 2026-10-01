@@ -1,8 +1,8 @@
 <div align="center">
 
-# 🎬 Video Saver
+# Sinmal
 
-<img src="img/caxumba.png" alt="Caxumba Video Saver" width="180" />
+<img src="img/sinmal.svg" alt="Sinmal" width="180" />
 
 **Detecte e baixe vídeos MP4, HLS e DASH direto do navegador — sem servidores externos.**
 
@@ -15,12 +15,16 @@
 
 ---
 
-CaxumbaVideoSaver é uma extensão de navegador (**Manifest V3**) que fareja vídeos **MP4**, **HLS** (`.m3u8`) e **DASH** servidos diretamente por uma página e permite baixá-los com poucos cliques. Tudo acontece localmente no seu navegador
+Sinmal é uma extensão de navegador (**Manifest V3**) que fareja vídeos **MP4**, **HLS** (`.m3u8`) e **DASH** servidos diretamente por uma página e permite baixá-los com poucos cliques. Tudo acontece localmente no seu navegador
 
 ## ✨ Funcionalidades
 
 - **Detecção automática** de vídeos MP4, HLS e DASH carregados pela aba atual
-- **Popup intuitiva** com a lista de vídeos encontrados, badges por tipo (`MP4` / `HLS` / `DASH`) e seleção de qualidade
+- **Popup intuitiva** com a lista de vídeos encontrados, badges por tipo (`MP4` / `HLS` / `DASH`) e seleção de qualidade com tamanho estimado
+- **Só áudio**: quando o stream tem faixa de áudio separada, dá para baixar apenas o áudio em `.m4a`, sem recodificar
+- **Progresso em tempo real** com porcentagem, velocidade e tempo restante, e botão para cancelar o download
+- **Resistente a falhas de rede**: segmentos que falham são baixados de novo automaticamente
+- **Nome do arquivo pelo título da página**, em vez do nome do manifesto (`index.m3u8`)
 - **Remuxagem no navegador** (via `ffmpeg.wasm`) para transformar streams HLS/DASH em um arquivo final pronto para baixar
 - **Download 100% local**, usando a API `downloads` do Chrome
 

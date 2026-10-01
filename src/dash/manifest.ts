@@ -1,4 +1,5 @@
 import type { MediaVariant } from "../types";
+import { estimateSize } from "../util";
 
 export interface DashRepresentation {
   id: string;
@@ -12,6 +13,8 @@ export interface DashRepresentation {
 export interface DashManifest {
   video: DashRepresentation[];
   audio: DashRepresentation[];
+  /** segundos, quando o MPD informa mediaPresentationDuration */
+  duration?: number;
 }
 
 export async function fetchAndParseManifest(url: string): Promise<DashManifest> {
@@ -57,17 +60,29 @@ export async function fetchAndParseManifest(url: string): Promise<DashManifest> 
     throw new Error("Nenhuma qualidade de video foi encontrada no manifesto DASH.");
   }
 
-  return { video, audio };
+  return { video, audio, duration: mpdDuration ?? undefined };
 }
 
 export function toMediaVariants(manifest: DashManifest): MediaVariant[] {
-  return manifest.video.map((representation) => ({
+  const audio = manifest.audio[0];
+  const variants: MediaVariant[] = manifest.video.map((representation) => ({
     id: representation.id,
     bandwidth: representation.bandwidth,
     resolution:
       representation.width && representation.height ? `${representation.width}x${representation.height}` : undefined,
     name: representation.height ? `${representation.height}p` : `${Math.round(representation.bandwidth / 1000)} kbps`,
+    size: estimateSize(representation.bandwidth + (audio?.bandwidth ?? 0), manifest.duration),
   }));
+  if (audio) {
+    variants.push({
+      id: audio.id,
+      bandwidth: audio.bandwidth,
+      name: "audio",
+      audioOnly: true,
+      size: estimateSize(audio.bandwidth, manifest.duration),
+    });
+  }
+  return variants;
 }
 
 function getAdaptationSetMediaType(adaptationSet: Element): "video" | "audio" | null {

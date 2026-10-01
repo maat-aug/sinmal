@@ -105,6 +105,7 @@ function parseMasterPlaylist(text: string, baseUrl: string): MediaVariant[] {
     if (!variantUri) continue;
 
     const bandwidth = attributes.BANDWIDTH ? Number.parseInt(attributes.BANDWIDTH, 10) : 0;
+    const averageBandwidth = Number.parseInt(attributes["AVERAGE-BANDWIDTH"] ?? "", 10);
     const resolution = attributes.RESOLUTION;
     const heightLabel = resolution?.split("x")[1];
     const audioUrl = attributes.AUDIO ? audioGroups.get(attributes.AUDIO) : undefined;
@@ -112,6 +113,7 @@ function parseMasterPlaylist(text: string, baseUrl: string): MediaVariant[] {
     variants.push({
       id: resolveUrl(baseUrl, variantUri),
       bandwidth: Number.isFinite(bandwidth) ? bandwidth : 0,
+      averageBandwidth: Number.isFinite(averageBandwidth) ? averageBandwidth : undefined,
       resolution,
       name: heightLabel ? `${heightLabel}p` : `${Math.round(bandwidth / 1000)} kbps`,
       audioUrl,
