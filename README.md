@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="img/sinmal.svg" alt="Sinmal" width="140" />
-
 # Sinmal
 
 **Detect and download the MP4, HLS and DASH videos a page is playing — straight from the browser.**
