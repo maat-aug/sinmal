@@ -47,6 +47,7 @@ async function copyStaticFiles() {
   await cp("src/manifest.json", `${outDir}/manifest.json`);
   await cp("src/popup/popup.html", `${outDir}/popup.html`);
   await cp("src/offscreen/offscreen.html", `${outDir}/offscreen.html`);
+  await cp("src/icons", `${outDir}/icons`, { recursive: true });
   await cp("node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.js", `${outDir}/ffmpeg/ffmpeg-core.js`);
   await cp("node_modules/@ffmpeg/core/dist/esm/ffmpeg-core.wasm", `${outDir}/ffmpeg/ffmpeg-core.wasm`);
 }

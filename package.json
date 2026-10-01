@@ -1,5 +1,5 @@
 {
-  "name": "caxumba-video-saver",
+  "name": "sinmal",
   "version": "0.1.0",
   "private": true,
   "description": "Extensao de navegador que detecta e baixa videos MP4/HLS servidos diretamente por uma pagina.",

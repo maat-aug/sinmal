@@ -2,7 +2,7 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <title>Caxumba Video Saver</title>
+    <title>Sinmal</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -54,7 +54,14 @@
         padding: 14px 14px 8px;
       }
 
+      header h1 img {
+        border-radius: 6px;
+      }
+
       header h1 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
         font-size: 15px;
         font-weight: 700;
         margin: 0;
@@ -227,7 +234,7 @@
   <body>
     <div id="app">
       <header>
-        <h1>Caxumba Video Saver</h1>
+        <h1><img src="icons/icon-32.png" alt="" width="24" height="24" />Sinmal</h1>
         <button id="clear-button" class="btn-ghost" type="button" disabled>Limpar</button>
       </header>
       <div id="status">Procurando videos nesta aba...</div>

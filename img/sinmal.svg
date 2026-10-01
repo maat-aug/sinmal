@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#2e1065"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="0.5" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#b45309"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="55%">
+      <stop offset="0" stop-color="#fbbf24" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="128" height="128" fill="url(#bg)"/>
+  <rect width="128" height="128" fill="url(#glow)"/>
+
+  <!-- lamina: costas retas-curvas, fio largo perto da ponta (cimitarra) -->
+  <path d="M38 92 C58 80 82 60 104 22 C106 40 102 58 90 72 C76 88 58 96 44 100 Z" fill="url(#gold)"/>
+  <path d="M42 90 C62 78 84 58 102 28" stroke="#fffbeb" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.75"/>
+
+  <!-- guarda e cabo -->
+  <rect x="28" y="92" width="26" height="8" rx="4" fill="#fbbf24" transform="rotate(55 41 96)"/>
+  <path d="M36 100 L20 112" stroke="#92400e" stroke-width="8" stroke-linecap="round"/>
+  <circle cx="18" cy="114" r="5" fill="#fbbf24"/>
+
+  <!-- brilho -->
+  <path d="M40 30 L43 41 L54 44 L43 47 L40 58 L37 47 L26 44 L37 41 Z" fill="#fef3c7"/>
+</svg>

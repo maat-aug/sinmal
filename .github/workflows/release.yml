@@ -33,11 +33,11 @@ jobs:
       - name: Package release
         run: |
           cd dist
-          zip -r "../caxumba-video-saver-${{ github.ref_name }}.zip" .
+          zip -r "../sinmal-${{ github.ref_name }}.zip" .
           cd ..
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: caxumba-video-saver-${{ github.ref_name }}.zip
+          files: sinmal-${{ github.ref_name }}.zip
           generate_release_notes: true
