@@ -162,8 +162,8 @@ src/
 ### Build and load
 
 ```bash
-git clone https://github.com/maat-aug/videoSaver.git
-cd videoSaver
+git clone https://github.com/maat-aug/sinmal.git
+cd sinmal
 npm ci
 npm run build
 ```
